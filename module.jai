@@ -6,6 +6,7 @@ Axis_Plane :: enum u32 {
     YZ;
 }
 
+ZERO3 :: Vector3.{0, 0, 0};
 X3 :: Vector3.{1, 0, 0};
 Y3 :: Vector3.{0, 1, 0};
 Z3 :: Vector3.{0, 0, 1};
