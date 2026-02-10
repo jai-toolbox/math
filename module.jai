@@ -6,6 +6,15 @@ Axis_Plane :: enum u32 {
     YZ;
 }
 
+Plane :: struct {
+    normal: Vector3;
+    d: float;  // distance from origin
+}
+
+Triangle :: struct {
+    p0, p1, p2: Vector3;
+}
+
 ZERO3 :: Vector3.{0, 0, 0};
 ONE3 :: Vector3.{1, 1, 1};
 X3 :: Vector3.{1, 0, 0};
