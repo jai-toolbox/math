@@ -17,6 +17,8 @@ Triangle :: struct {
 
 ZERO3 :: Vector3.{0, 0, 0};
 ONE3 :: Vector3.{1, 1, 1};
+NEGATIVE_ONE3 :: Vector3.{-1, -1, -1};
+
 X3 :: Vector3.{1, 0, 0};
 Y3 :: Vector3.{0, 1, 0};
 Z3 :: Vector3.{0, 0, 1};
