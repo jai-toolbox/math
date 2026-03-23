@@ -1,5 +1,11 @@
 #import "Math";
 
+Axis :: enum {
+    X;
+    Y;
+    Z;
+}
+
 Axis_Plane :: enum u32 {
     XY;
     XZ;
