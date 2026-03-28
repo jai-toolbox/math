@@ -111,6 +111,14 @@ normalized_cross :: (a: Vector3, b: Vector3, epsilon := 0.0, fallback :Vector3 =
     return normalize(cross_product(a, b), epsilon, fallback);
 }
 
+cos_of_angle_between :: (a: Vector3, b: Vector3) -> float {
+    return dot(normalize(a), normalize(b));
+}
+
+angle_between :: (a: Vector3, b: Vector3) -> float {
+    return acos(clamp(cos_of_angle_between(a, b), -1.0, 1.0));
+}
+
 // get lowest root of quadratic equation within range [0, max_r]
 get_smallest_non_negative_root_of_quadratic :: (a: float, b: float, c: float, max_r: float) -> (found: bool, root: float) {
     determinant := b * b - 4.0 * a * c;
