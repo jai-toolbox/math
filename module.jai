@@ -52,6 +52,53 @@ Z3 :: Vector3.{0, 0, 1};
 X2 :: Vector2.{1, 0};
 Y2 :: Vector2.{0, 1};
 
+/*
+Branchfree saturating addition for unsigned 32-bit integers.
+
+Recall this fact from number theory:
+https://www.openmath.net/number_theory/quotient_and_remainder.html#proposition-remainder-of-sum-less-than-first-summand
+
+When adding two unsigned 32 bit integers if overflow happens, it is equvalent to just doing % (U32_MAX + 1), thus the mapping from code to math is valid.
+
+Let a, b be two unsigned 32-bit integers, so a, b in [0, ..., U32_MAX], and use n = U32_MAX + 1.
+
+If the addition overflows, res wraps around and becomes less than a by the proposition.
+
+That means that when overflow occurs then res < a evalutes to 1, 0 otherwise.
+
+-1 in twos complement is 0xFFFFFFFF
+-0 in twos complement is 0x00000000
+
+if you bitwise or 0xFFFFFFFF with any number you get 0xFFFFFFFF back.
+if you bitwise or 0x00000000 with any number you get back the original.
+
+This is how we "bake" the conditional logic into one thing.
+
+ */
+saturating_add :: (a: u32, b: u32) -> u32 {
+    res := a + b;
+
+    res |= cast,no_check(u32)(-(cast(s32)(res < a)));
+    return res;
+}
+
+/*
+Branchfree saturating subtraction for unsigned 32-bit integers.
+
+If the subtraction underflows, res wraps around and becomes greater than a.
+We exploit this: (res <= a) evaluates to 1 when no underflow, 0 on underflow.
+Negating that: -(1) in two's complement is 0xFFFFFFFF and -(0) is 0x00000000.
+
+So on underflow, res &= 0x00000000 clamps to 0.
+On no underflow, res &= 0xFFFFFFFF doesn't change res.
+ */
+saturating_sub :: (a: u32, b: u32) -> u32 {
+    res := a - b;
+    res &= cast,no_check(u32)(-(cast(s32)(res <= a)));
+    return res;
+}
+
+
 non_neg_mod :: (value : int, mod : int) -> int { 
     return (value % mod + mod) % mod;
 }
