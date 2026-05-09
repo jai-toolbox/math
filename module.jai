@@ -98,6 +98,14 @@ saturating_sub :: (a: u32, b: u32) -> u32 {
     return res;
 }
 
+round :: (x: float) -> s64 {
+    if x >= 0 {
+        return cast(s64)(x + 0.5);
+    } else {
+        return cast(s64)(x - 0.5);
+    }
+}
+
 
 non_neg_mod :: (value : int, mod : int) -> int { 
     return (value % mod + mod) % mod;
