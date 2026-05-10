@@ -121,6 +121,17 @@ angle_between :: (a: Vector3, b: Vector3) -> float {
 
 // get lowest root of quadratic equation within range [0, max_r]
 get_smallest_non_negative_root_of_quadratic :: (a: float, b: float, c: float, max_r: float) -> (found: bool, root: float) {
+    EPSILON :: 0.000001;
+
+    // degenerate into a linear equation when the quadratic term is effectively zero, we solve b*t + c = 0 directly.
+    if abs(a) <= EPSILON {
+        if abs(b) <= EPSILON return false, 0;
+
+        r := -c / b;
+        if r > 0 && r < max_r return true, r;
+        return false, 0;
+    }
+
     determinant := b * b - 4.0 * a * c;
     
     if determinant < 0.0 { return false, 0; }
