@@ -127,6 +127,38 @@ angle_between :: (a: Vector3, b: Vector3) -> float {
     return acos(clamp(cos_of_angle_between(a, b), -1.0, 1.0));
 }
 
+DIRECTION_EPSILON :: 0.00001;
+
+points_same_way :: (a: Vector3, b: Vector3) -> bool {
+    if length_squared(a) <= DIRECTION_EPSILON return false;
+    if length_squared(b) <= DIRECTION_EPSILON return false;
+
+    an := normalize(a);
+    bn := normalize(b);
+
+    return dot(an, bn) > DIRECTION_EPSILON;
+}
+
+points_opposite_way :: (a: Vector3, b: Vector3) -> bool {
+    if length_squared(a) <= DIRECTION_EPSILON return false;
+    if length_squared(b) <= DIRECTION_EPSILON return false;
+
+    an := normalize(a);
+    bn := normalize(b);
+
+    return dot(an, bn) < -DIRECTION_EPSILON;
+}
+
+is_perpendicular :: (a: Vector3, b: Vector3) -> bool {
+    if length_squared(a) <= DIRECTION_EPSILON return false;
+    if length_squared(b) <= DIRECTION_EPSILON return false;
+
+    an := normalize(a);
+    bn := normalize(b);
+
+    return abs(dot(an, bn)) <= DIRECTION_EPSILON;
+}
+
 // get lowest root of quadratic equation within range [0, max_r]
 get_smallest_non_negative_root_of_quadratic :: (a: float, b: float, c: float, max_r: float) -> (found: bool, root: float) {
     EPSILON :: 0.000001;
