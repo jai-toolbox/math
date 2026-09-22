@@ -1,5 +1,8 @@
 #import "Math";
 
+#load "axis_aligned_bounding_box.jai";
+#load "triangle.jai";
+
 Axis :: enum {
     X;
     Y;
@@ -18,10 +21,31 @@ Plane :: struct {
     d: float;  // distance from origin
 }
 
-Triangle :: struct {
-    p0, p1, p2: Vector3;
+
+
+// Moller-Trumbore ray/triangle intersection. The returned fraction is along
+// direction, which may be a finite segment; callers clamp it to their reach.
+// FLOAT32_MAX denotes a miss.
+ray_triangle_intersection :: (origin: Vector3, direction: Vector3, v0: Vector3, v1: Vector3, v2: Vector3) -> float32 {
+    epsilon: float32 = 1.0e-12;
+    e1 := v1 - v0;
+    e2 := v2 - v0;
+    p := cross(direction, e2);
+    det := dot(e1, p);
+    det_near_zero := abs(det) < epsilon;
+    if det_near_zero det = 1.0;
+
+    s := origin - v0;
+    u := dot(s, p) / det;
+    q := cross(s, e1);
+    v := dot(direction, q) / det;
+    t := dot(e2, q) / det;
+
+    if det_near_zero || u < 0.0 || v < 0.0 || u + v > 1.0 || t < 0.0 return FLOAT32_MAX;
+    return t;
 }
 
+// proof: https://www.openmath.net/algebra/linear/vectors.html#proposition-barycentric-coordinates-from-dot-products
 point_in_triangle :: (point: Vector3, tri: Triangle) -> bool {
 
     // barycentric coordinates
@@ -40,6 +64,29 @@ point_in_triangle :: (point: Vector3, tri: Triangle) -> bool {
     barycentric_v := (dot_edge2_edge2 * dot_edge1_point - dot_edge2_edge1 * dot_edge2_point) * inverse_denominator;
     
     return (barycentric_u >= 0) && (barycentric_v >= 0) && (barycentric_u + barycentric_v <= 1);
+}
+
+// The weights correspond to a, b, and c. They are also defined outside the
+// triangle; inside is false there or when the triangle has zero UV area.
+barycentric_coordinates_2d :: (point: Vector2, a: Vector2, b: Vector2, c: Vector2) -> weights: Vector3, inside: bool {
+    ab := b - a;
+    ac := c - a;
+    ap := point - a;
+    denominator := ab.x * ac.y - ab.y * ac.x;
+    if abs(denominator) <= 0.000000000001 return .{}, false;
+
+    weight_b := (ap.x * ac.y - ap.y * ac.x) / denominator;
+    weight_c := (ab.x * ap.y - ab.y * ap.x) / denominator;
+    weights := Vector3.{1 - weight_b - weight_c, weight_b, weight_c};
+
+    epsilon :: 0.000001;
+    inside := weights.x >= -epsilon && weights.y >= -epsilon && weights.z >= -epsilon;
+    return weights, inside;
+}
+
+point_in_triangle :: (point: Vector2, a: Vector2, b: Vector2, c: Vector2) -> bool {
+    _, inside := barycentric_coordinates_2d(point, a, b, c);
+    return inside;
 }
 
 ZERO3 :: Vector3.{0, 0, 0};
@@ -167,6 +214,7 @@ get_smallest_non_negative_root_of_quadratic :: (a: float, b: float, c: float, ma
     if abs(a) <= EPSILON {
         if abs(b) <= EPSILON return false, 0;
 
+
         r := -c / b;
         if r > 0 && r < max_r return true, r;
         return false, 0;
@@ -192,3 +240,4 @@ get_smallest_non_negative_root_of_quadratic :: (a: float, b: float, c: float, ma
     
     return false, 0;
 }
+
