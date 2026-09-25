@@ -1,3 +1,4 @@
+#import "Basic";
 #import "Math";
 
 #load "axis_aligned_bounding_box.jai";
@@ -19,6 +20,26 @@ Plane :: struct {
     normal: Vector3;
     // this is bad naming fix this.
     d: float;  // distance from origin
+}
+
+// Cubic interpolation over [0, 1] with smooth endpoints. It maps 0 to 0 and
+// 1 to 1, and its first derivative is 0 at both ends, so a transition using it
+// starts and finishes without an abrupt change in slope.
+smooth_step :: (t: float32) -> float32 {
+    return t * t * (3.0 - 2.0 * t);
+}
+
+// note this is integer based.
+log_2 :: (n : int) -> int {
+    assert(n > 0);
+    result := 0;
+    // 00100101...0110 a non-zero generic binary number
+    // always reduces to 1 after some amount of bitshifts.
+    while n != 1 {
+        result += 1;
+        n >>= 1;
+    }
+    return result;
 }
 
 
@@ -240,4 +261,3 @@ get_smallest_non_negative_root_of_quadratic :: (a: float, b: float, c: float, ma
     
     return false, 0;
 }
-
