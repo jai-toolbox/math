@@ -3,6 +3,7 @@
 
 #load "axis_aligned_bounding_box.jai";
 #load "triangle.jai";
+#load "triangle_bounding_volume_hierarchy.jai";
 
 Axis :: enum {
     X;
@@ -70,9 +71,9 @@ ray_triangle_intersection :: (origin: Vector3, direction: Vector3, v0: Vector3, 
 point_in_triangle :: (point: Vector3, tri: Triangle) -> bool {
 
     // barycentric coordinates
-    edge_to_vertex2 := tri.p2 - tri.p0;
-    edge_to_vertex1 := tri.p1 - tri.p0;
-    edge_to_point := point - tri.p0;
+    edge_to_vertex2 := tri.c - tri.a;
+    edge_to_vertex1 := tri.b - tri.a;
+    edge_to_point := point - tri.a;
     
     dot_edge2_edge2 := dot(edge_to_vertex2, edge_to_vertex2);
     dot_edge2_edge1 := dot(edge_to_vertex2, edge_to_vertex1);

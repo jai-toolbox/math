@@ -1,12 +1,12 @@
 Triangle :: struct {
-    p0, p1, p2: Vector3; // rename to a b c later probably.
-    #overlay (p0) positions : [3] Vector3;
+    a, b, c: Vector3;
+    #overlay (a) positions : [3] Vector3;
 }
 
 bounds :: (t : $T/interface Triangle) -> AABB {
-    min := min(min(t.p0, t.p1), t.p2);
-    max := max(max(t.p0, t.p1), t.p2);
-    return .{min, max};
+    minimum := min(min(t.a, t.b), t.c);
+    maximum := max(max(t.a, t.b), t.c);
+    return .{minimum, maximum};
 }
 
 bounds :: (ts : [] $T/interface Triangle) -> AABB {
@@ -14,6 +14,10 @@ bounds :: (ts : [] $T/interface Triangle) -> AABB {
     root := bounds(ts[0]);
     for ts merge(*root, bounds(it));
     return root;
+}
+
+centroid :: (using t : Triangle) -> Vector3 {
+    return (a + b + c) / 3;
 }
 
 Projection_Interval :: struct {
@@ -100,5 +104,5 @@ triangle_intersects_aabb :: (a : Vector3, b : Vector3, c : Vector3, box : AABB) 
 }
 
 triangle_intersects_aabb :: (triangle : $T/interface Triangle, box : AABB) -> bool {
-    return triangle_intersects_aabb(triangle.p0, triangle.p1, triangle.p2, box);
+    return triangle_intersects_aabb(triangle.a, triangle.b, triangle.c, box);
 }
