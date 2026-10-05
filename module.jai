@@ -115,11 +115,125 @@ ZERO3 :: Vector3.{0, 0, 0};
 ONE3 :: Vector3.{1, 1, 1};
 NEGATIVE_ONE3 :: Vector3.{-1, -1, -1};
 
+Vector3i :: struct {
+    x, y, z: int;
+}
+
+// vector comparisons succeed only when every component satisfies the comparison.
+operator < :: inline (a: Vector3i, b: Vector3i) -> bool {
+    return a.x < b.x && a.y < b.y && a.z < b.z;
+}
+
+operator <= :: inline (a: Vector3i, b: Vector3i) -> bool {
+    return a.x <= b.x && a.y <= b.y && a.z <= b.z;
+}
+
+operator > :: inline (a: Vector3i, b: Vector3i) -> bool {
+    return a.x > b.x && a.y > b.y && a.z > b.z;
+}
+
+operator >= :: inline (a: Vector3i, b: Vector3i) -> bool {
+    return a.x >= b.x && a.y >= b.y && a.z >= b.z;
+}
+
+operator < :: inline (a: Vector3i, b: int) -> bool {
+    return a.x < b && a.y < b && a.z < b;
+}
+
+operator <= :: inline (a: Vector3i, b: int) -> bool {
+    return a.x <= b && a.y <= b && a.z <= b;
+}
+
+operator > :: inline (a: Vector3i, b: int) -> bool {
+    return a.x > b && a.y > b && a.z > b;
+}
+
+operator >= :: inline (a: Vector3i, b: int) -> bool {
+    return a.x >= b && a.y >= b && a.z >= b;
+}
+
 X3 :: Vector3.{1, 0, 0};
 Y3 :: Vector3.{0, 1, 0};
 Z3 :: Vector3.{0, 0, 1};
 X2 :: Vector2.{1, 0};
 Y2 :: Vector2.{0, 1};
+
+
+// we inline these things to open them up for optimization
+
+component_product :: inline (using v : Vector3) -> float {
+    return x * y * z;
+}
+
+component_product :: inline (using v: Vector3i) -> int {
+    return x * y * z;
+}
+
+floor :: inline (using v : Vector3) -> Vector3 {
+    return .{floor(x), floor(y), floor(z)};
+}
+
+floor :: inline (using v : *Vector3) {
+    x = floor(x); y = floor(y); z = floor(z);
+}
+
+to_vector3i :: inline (v: Vector3) -> Vector3i {
+    return .{cast(int) v.x, cast(int) v.y, cast(int) v.z};
+}
+
+to_vector3 :: inline (v: Vector3i) -> Vector3 {
+    return .{cast(float32) v.x, cast(float32) v.y, cast(float32) v.z};
+}
+
+round :: inline (v: Vector3) -> Vector3i {
+    return .{cast(int) round(v.x), cast(int) round(v.y), cast(int) round(v.z)};
+}
+
+clamp :: inline (value: Vector3, minimum: Vector3, maximum: Vector3) -> Vector3 {
+    return .{
+        clamp(value.x, minimum.x, maximum.x),
+        clamp(value.y, minimum.y, maximum.y),
+        clamp(value.z, minimum.z, maximum.z),
+    };
+}
+
+/*
+
+(0, 0), (1, 0)    ... (w-1, 0)
+(0, 1), (1, 1)    ... (w-1, 1)
+  .       .              .
+  .       .              .
+(0,h-1), (1,h-1)  ... (w-1,h-1)
+
+there is a canonical bijection between this and {0, ..., w * h - 1}
+
+  0      1             w-1      w                   w + (w-1)      h*w                   h*w + (w-1)
+(0, 0), (1, 0),  ... (w-1, 0) (0, 1), (1, 1),  ... (w-1, 1) ...  (0,h-1), (1,h-1),  ... (w-1,h-1)
+
+so that
+
+f(x, y) = w * y + x
+
+*/
+
+
+flatten_index :: inline (coordinate: Vector2, dimensions: Vector2) -> int {
+    x := cast(int) coordinate.x;
+    y := cast(int) coordinate.y;
+    width := cast(int) dimensions.x;
+    return y * width + x;
+}
+
+// the same idea works for 3d but here we iterate over all the x's, then iterate over the y's and then the z's
+
+flatten_index :: inline (
+    coordinate: Vector3i,
+    dimensions: Vector3i,
+) -> int {
+    return (coordinate.z * dimensions.y + coordinate.y)
+        * dimensions.x + coordinate.x;
+}
+
 
 /*
 Branchfree saturating addition for unsigned 32-bit integers.
@@ -167,7 +281,7 @@ saturating_sub :: (a: u32, b: u32) -> u32 {
     return res;
 }
 
-round :: (x: float) -> s64 {
+round :: inline (x: float) -> s64 {
     if x >= 0 {
         return cast(s64)(x + 0.5);
     } else {
