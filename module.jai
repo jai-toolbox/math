@@ -161,6 +161,19 @@ Y2 :: Vector2.{0, 1};
 
 // we inline these things to open them up for optimization
 
+// A vector is finite only when every component is finite.
+is_finite :: inline (v: Vector2) -> bool {
+    return is_finite(v.x) && is_finite(v.y);
+}
+
+is_finite :: inline (v: Vector3) -> bool {
+    return is_finite(v.x) && is_finite(v.y) && is_finite(v.z);
+}
+
+is_finite :: inline (v: Vector4) -> bool {
+    return is_finite(v.x) && is_finite(v.y) && is_finite(v.z) && is_finite(v.w);
+}
+
 component_product :: inline (using v : Vector3) -> float {
     return x * y * z;
 }

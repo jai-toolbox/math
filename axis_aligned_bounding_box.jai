@@ -29,6 +29,13 @@ size :: (a : AABB) -> Vector3 {
     return a.max - a.min;
 }
 
+// each axis must have positive extent; reject flat or inverted bounds.
+has_positive_volume :: inline (a: AABB) -> bool {
+    return a.min.x < a.max.x
+        && a.min.y < a.max.y
+        && a.min.z < a.max.z;
+}
+
 longest_axis :: (a : AABB) -> Axis {
     extent := size(a);
     if extent.x > extent.y {
