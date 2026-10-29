@@ -2,6 +2,7 @@
 #import "Math";
 
 #load "axis_aligned_bounding_box.jai";
+#load "ray.jai";
 #load "triangle.jai";
 #load "triangle_bounding_volume_hierarchy.jai";
 
@@ -67,25 +68,39 @@ ray_triangle_intersection :: (origin: Vector3, direction: Vector3, v0: Vector3, 
     return t;
 }
 
-// proof: https://www.openmath.net/algebra/linear/vectors.html#proposition-barycentric-coordinates-from-dot-products
-point_in_triangle :: (point: Vector3, tri: Triangle) -> bool {
+// The weights correspond to a, b, and c. They are also defined outside the
+// triangle; inside is false there or when the triangle has zero area.
+// Proof: https://www.openmath.net/algebra/linear/vectors.html#proposition-barycentric-coordinates-from-dot-products
+barycentric_coordinates_3d :: (
+    point: Vector3,
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+) -> weights: Vector3, inside: bool {
+    ab := b - a;
+    ac := c - a;
+    ap := point - a;
 
-    // barycentric coordinates
-    edge_to_vertex2 := tri.c - tri.a;
-    edge_to_vertex1 := tri.b - tri.a;
-    edge_to_point := point - tri.a;
-    
-    dot_edge2_edge2 := dot(edge_to_vertex2, edge_to_vertex2);
-    dot_edge2_edge1 := dot(edge_to_vertex2, edge_to_vertex1);
-    dot_edge2_point := dot(edge_to_vertex2, edge_to_point);
-    dot_edge1_edge1 := dot(edge_to_vertex1, edge_to_vertex1);
-    dot_edge1_point := dot(edge_to_vertex1, edge_to_point);
-    
-    inverse_denominator := 1.0 / (dot_edge2_edge2 * dot_edge1_edge1 - dot_edge2_edge1 * dot_edge2_edge1);
-    barycentric_u := (dot_edge1_edge1 * dot_edge2_point - dot_edge2_edge1 * dot_edge1_point) * inverse_denominator;
-    barycentric_v := (dot_edge2_edge2 * dot_edge1_point - dot_edge2_edge1 * dot_edge2_point) * inverse_denominator;
-    
-    return (barycentric_u >= 0) && (barycentric_v >= 0) && (barycentric_u + barycentric_v <= 1);
+    ab_ab := dot(ab, ab);
+    ab_ac := dot(ab, ac);
+    ac_ac := dot(ac, ac);
+    ap_ab := dot(ap, ab);
+    ap_ac := dot(ap, ac);
+    denominator := ab_ab * ac_ac - ab_ac * ab_ac;
+    if abs(denominator) <= 0.000000000001 return .{}, false;
+
+    weight_b := (ac_ac * ap_ab - ab_ac * ap_ac) / denominator;
+    weight_c := (ab_ab * ap_ac - ab_ac * ap_ab) / denominator;
+    weights := Vector3.{1.0 - weight_b - weight_c, weight_b, weight_c};
+
+    epsilon :: 0.000001;
+    inside := weights.x >= -epsilon && weights.y >= -epsilon && weights.z >= -epsilon;
+    return weights, inside;
+}
+
+point_in_triangle :: (point: Vector3, tri: Triangle) -> bool {
+    _, inside := barycentric_coordinates_3d(point, tri.a, tri.b, tri.c);
+    return inside;
 }
 
 // The weights correspond to a, b, and c. They are also defined outside the

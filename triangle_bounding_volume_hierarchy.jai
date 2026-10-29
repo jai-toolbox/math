@@ -29,6 +29,15 @@ Triangle_BVH :: struct {
     nodes: [..] Triangle_BVH_Node;
 }
 
+Triangle_Ray_Hit :: struct {
+    // This is a world-space distance when direction is normalized.
+    distance: float32;
+    triangle_index: int = -1;
+
+    // Weights for triangle a, b, and c, respectively.
+    barycentric_coordinates: Vector3;
+}
+
 reference :: (
     triangle: $T/interface Triangle,
     triangle_index: int,
@@ -147,6 +156,60 @@ node_is_leaf :: (node: Triangle_BVH_Node) -> bool {
     assert(has_left_child == has_right_child);
     // because of how we insert left child first, if left child doesn't exist neither does right
     return !has_left_child;
+}
+
+closest_ray_hit :: (
+    origin: Vector3,
+    direction: Vector3,
+    tnear: float32,
+    tfar: float32,
+    triangles: [] $T/interface Triangle,
+    bvh: *Triangle_BVH,
+) -> found: bool, hit: Triangle_Ray_Hit {
+    if bvh.nodes.count == 0 || tfar < tnear return false, .{};
+
+    found := false;
+    hit: Triangle_Ray_Hit;
+    closest := tfar;
+    stack: [128] int;
+    stack_count := 1;
+    stack[0] = 0;
+
+    while stack_count > 0 {
+        stack_count -= 1;
+        node := bvh.nodes[stack[stack_count]];
+        if !ray_segment_intersects_aabb(
+            origin, direction, node.bounds.min, node.bounds.max, closest) continue;
+
+        if node_is_leaf(node) {
+            reference_end := node.first_triangle_reference_index
+                + node.triangle_reference_count;
+            for reference_index:
+                node.first_triangle_reference_index..reference_end - 1 {
+                triangle_index := bvh.references[reference_index].triangle_index;
+                triangle := triangles[triangle_index];
+                distance := ray_triangle_intersection(
+                    origin, direction, triangle.a, triangle.b, triangle.c);
+                if distance == FLOAT32_MAX
+                    || distance < tnear || distance > closest continue;
+
+                closest = distance;
+                hit.distance = distance;
+                hit.triangle_index = triangle_index;
+                hit_position := origin + direction * distance;
+                hit.barycentric_coordinates, _ = barycentric_coordinates_3d(
+                    hit_position, triangle.a, triangle.b, triangle.c);
+                found = true;
+            }
+        } else {
+            assert(stack_count + 2 <= stack.count);
+            stack[stack_count] = node.left_node_index;
+            stack[stack_count + 1] = node.right_node_index;
+            stack_count += 2;
+        }
+    }
+
+    return found, hit;
 }
 
 deinit :: (using bvh: *Triangle_BVH) {
