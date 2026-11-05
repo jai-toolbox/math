@@ -334,6 +334,46 @@ cos_of_angle_between :: (a: Vector3, b: Vector3) -> float {
     return dot(normalize(a), normalize(b));
 }
 
+/*
+Shortest rotation taking from's direction onto to's direction. Input lengths
+need not match; both vectors must be finite and nonzero. Opposite directions
+have no unique rotation axis, so choose a deterministic perpendicular one.
+*/
+rotation_between_vectors :: (from: Vector3, to: Vector3) -> Quaternion {
+    assert(is_finite(from) && is_finite(to), "Rotation directions must be finite");
+    
+    from_scale := max(abs(from.x), max(abs(from.y), abs(from.z)));
+    to_scale := max(abs(to.x), max(abs(to.y), abs(to.z)));
+    
+    assert(from_scale > 0 && to_scale > 0, "Rotation directions must be nonzero");
+    
+    // Scaling first keeps normalization valid for very large/small vectors.
+    a := normalize(from / from_scale);
+    b := normalize(to / to_scale);
+    alignment := clamp(dot(a, b), -1.0, 1.0);
+    axis := cross(a, b);
+    if alignment >= 0 return normalize(Quaternion.{axis.x, axis.y, axis.z, 1 + alignment});
+
+    // Cancellation near opposite directions can leave a small component along
+    // a. So we remove it before normalizing the very short cross product.
+    axis -= a * dot(a, axis);
+    axis_length := length(axis);
+    if axis_length > 0 {
+        // equivalent half-angle construction, stable near 180 degrees where
+        // 1 + alignment can round to zero. 
+        // The vector part is a unit axis.
+        axis /= axis_length;
+        return normalize(Quaternion.{axis.x, axis.y, axis.z, axis_length / (1 - alignment)});
+    }
+
+    basis := Z3;
+    least_alignment := abs(a.z);
+    if abs(a.y) < least_alignment { basis = Y3; least_alignment = abs(a.y); }
+    if abs(a.x) < least_alignment basis = X3;
+    axis = normalize(cross(a, basis));
+    return .{axis.x, axis.y, axis.z, 0};
+}
+
 angle_between :: (a: Vector3, b: Vector3) -> float {
     return acos(clamp(cos_of_angle_between(a, b), -1.0, 1.0));
 }
