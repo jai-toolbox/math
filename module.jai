@@ -170,6 +170,16 @@ operator >= :: inline (a: Vector3i, b: int) -> bool {
 X3 :: Vector3.{1, 0, 0};
 Y3 :: Vector3.{0, 1, 0};
 Z3 :: Vector3.{0, 0, 1};
+
+// Engine world convention: right-handed XYZ, +X forward, +Z up, -Y right.
+// These describe world directions; asset-local axes and screen axes are separate.
+WORLD_FORWARD  :: X3;
+WORLD_BACKWARD :: #run -WORLD_FORWARD;
+WORLD_RIGHT    :: #run -Y3;
+WORLD_LEFT     :: #run -WORLD_RIGHT;
+WORLD_UP       :: Z3;
+WORLD_DOWN     :: #run -WORLD_UP;
+
 X2 :: Vector2.{1, 0};
 Y2 :: Vector2.{0, 1};
 
