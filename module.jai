@@ -1,8 +1,9 @@
 #import "Basic";
 #import "Math";
 
+#load "noise/perlin.jai";
+#load "noise/simplex.jai";
 #load "axis_aligned_bounding_box.jai";
-#load "ray.jai";
 #load "triangle.jai";
 #load "triangle_bounding_volume_hierarchy.jai";
 
@@ -24,11 +25,132 @@ Plane :: struct {
     d: float;  // distance from origin
 }
 
-// Cubic interpolation over [0, 1] with smooth endpoints. It maps 0 to 0 and
-// 1 to 1, and its first derivative is 0 at both ends, so a transition using it
-// starts and finishes without an abrupt change in slope.
-smooth_step :: (t: float32) -> float32 {
+linear_interpolate :: lerp;
+
+/*
+Unnormalized Gaussian with value 1 at zero: e^(-x^2*squared_input_scale).
+A positive squared-input scale controls narrowing; the integral is not normalized to 1.
+This multiplies x^2; a horizontal input scale c would correspond to c^2 here.
+*/
+gaussian :: inline (x: float32, squared_input_scale: float32 = 1) -> float32 {
+    return exp(-x*x*squared_input_scale);
+}
+
+/*
+Approximate blackbody chromaticity as linear sRGB, with brightness kept separate.
+Tanner Helland's temperature-to-RGB fit (2012), decoded from sRGB to linear:
+https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorithm-code.html
+Finite positive inputs clamp to the fit's supported 1000..40000 kelvin range.
+Nonpositive temperatures return black. This is a color approximation, not radiance.
+*/
+black_body_radiation_color :: (temperature_kelvin: float32) -> Vector3 {
+    if temperature_kelvin <= 0 return .{0, 0, 0};
+    temperature: float32 = clamp(temperature_kelvin, 1000.0, 40000.0) / 100;
+    color: Vector3;
+    if temperature <= 66 {
+        color.x = 255;
+        color.y = cast(float32) (99.4708025861 * log(temperature) - 161.1195681661);
+    } else {
+        color.x = cast(float32) (329.698727446 * pow(temperature - 60, -0.1332047592));
+        color.y = cast(float32) (288.1221695283 * pow(temperature - 60, -0.0755148492));
+    }
+    if temperature >= 66 color.z = 255;
+    else if temperature <= 19 color.z = 0;
+    else color.z = cast(float32) (138.5177312231 * log(temperature - 10) - 305.0447927307);
+    for *channel: color.component {
+        encoded: float32 = clamp(channel.*, 0.0, 255.0) / 255;
+        if encoded <= 0.04045 channel.* = encoded / 12.92;
+        else channel.* = pow((encoded + 0.055) / 1.055, 2.4);
+    }
+    return color;
+}
+
+/*
+Rotate a 32-bit unsigned value left, wrapping the high bits into the low bits.
+Counts wrap modulo 32; masking both shifts also handles a count of zero.
+*/
+rotate_bits_left :: inline (value: u32, count: u32) -> u32 {
+    shift := count & 31;
+    return (value << shift) | (value >> ((32 - shift) & 31));
+}
+
+/*
+Slab test for a finite ray segment against an axis-aligned bounding box.
+The tested segment is origin + direction * t, where t is in
+[0, end_fraction].
+*/
+ray_segment_intersects_aabb :: (
+    origin: Vector3,
+    direction: Vector3,
+    bounds_min: Vector3,
+    bounds_max: Vector3,
+    end_fraction: float32,
+) -> bool {
+    near_fraction: float32 = 0;
+    far_fraction := end_fraction;
+    for axis: 0..2 {
+        axis_origin := origin.component[axis];
+        axis_direction := direction.component[axis];
+        axis_minimum := bounds_min.component[axis];
+        axis_maximum := bounds_max.component[axis];
+
+        if abs(axis_direction) <= 0.00000001 {
+            if axis_origin < axis_minimum || axis_origin > axis_maximum return false;
+            continue;
+        }
+
+        inverse_direction := 1.0 / axis_direction;
+        axis_near := (axis_minimum - axis_origin) * inverse_direction;
+        axis_far := (axis_maximum - axis_origin) * inverse_direction;
+        if axis_near > axis_far swap(*axis_near, *axis_far);
+        near_fraction = max(near_fraction, axis_near);
+        far_fraction = min(far_fraction, axis_far);
+        if near_fraction > far_fraction return false;
+    }
+    return true;
+}
+
+/*
+Evaluate a scalar cubic Bezier curve. a and d are endpoints; b and c are
+control points. t runs from 0 to 1 along the curve and is not clamped.
+*/
+cubic_bezier :: (a: float32, b: float32, c: float32, d: float32, t: float32) -> float32 {
+    u := 1 - t;
+    return u*u*u*a + 3*u*u*t*b + 3*u*t*t*c + t*t*t*d;
+}
+
+/*
+Convert a value's position in an ascending range to a fraction in [0, 1].
+Values outside the range are clamped. Equal endpoints form a step:
+values at or below the endpoint return 0, and values above it return 1.
+*/
+normalize_to_unit_interval :: (value: float32, start: float32, end: float32) -> float32 {
+    if value <= start return 0;
+    if value >= end return 1;
+    return (value - start) / (end - start);
+}
+
+/*
+Cubic interpolation over [0, 1] with smooth endpoints. It maps 0 to 0 and
+1 to 1, and its first derivative is 0 at both ends, so a transition using it
+starts and finishes without an abrupt change in slope.
+Input is clamped to [0, 1].
+*/
+smoothstep :: (t: float32) -> float32 {
+    t = clamp(t, 0.0, 1.0);
     return t * t * (3.0 - 2.0 * t);
+}
+
+/*
+Quintic interpolation over [0, 1], also called smootherstep.
+The unique polynomial of degree at most five satisfying
+f(0) = 0, f(1) = 1, f'(0) = f'(1) = 0, and f''(0) = f''(1) = 0
+is f(t) = 6t^5 - 15t^4 + 10t^3. These endpoint conditions make a
+transition start and finish with zero slope and zero curvature.
+The caller supplies t in [0, 1]; this procedure does not clamp it.
+*/
+smootherstep :: (t: float32) -> float32 {
+    return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
 // note this is integer based.
@@ -46,9 +168,11 @@ log_2 :: (n : int) -> int {
 
 
 
-// Moller-Trumbore ray/triangle intersection. The returned fraction is along
-// direction, which may be a finite segment; callers clamp it to their reach.
-// FLOAT32_MAX denotes a miss.
+/*
+Moller-Trumbore ray/triangle intersection. The returned fraction is along
+direction, which may be a finite segment; callers clamp it to their reach.
+FLOAT32_MAX denotes a miss.
+*/
 ray_triangle_intersection :: (origin: Vector3, direction: Vector3, v0: Vector3, v1: Vector3, v2: Vector3) -> float32 {
     epsilon: float32 = 1.0e-12;
     e1 := v1 - v0;
@@ -68,9 +192,11 @@ ray_triangle_intersection :: (origin: Vector3, direction: Vector3, v0: Vector3, 
     return t;
 }
 
-// The weights correspond to a, b, and c. They are also defined outside the
-// triangle; inside is false there or when the triangle has zero area.
-// Proof: https://www.openmath.net/algebra/linear/vectors.html#proposition-barycentric-coordinates-from-dot-products
+/*
+The weights correspond to a, b, and c. They are also defined outside the
+triangle; inside is false there or when the triangle has zero area.
+Proof: https://www.openmath.net/algebra/linear/vectors.html#proposition-barycentric-coordinates-from-dot-products
+*/
 barycentric_coordinates_3d :: (
     point: Vector3,
     a: Vector3,
@@ -103,8 +229,10 @@ point_in_triangle :: (point: Vector3, tri: Triangle) -> bool {
     return inside;
 }
 
-// The weights correspond to a, b, and c. They are also defined outside the
-// triangle; inside is false there or when the triangle has zero UV area.
+/*
+The weights correspond to a, b, and c. They are also defined outside the
+triangle; inside is false there or when the triangle has zero UV area.
+*/
 barycentric_coordinates_2d :: (point: Vector2, a: Vector2, b: Vector2, c: Vector2) -> weights: Vector3, inside: bool {
     ab := b - a;
     ac := c - a;
@@ -127,7 +255,11 @@ point_in_triangle :: (point: Vector2, a: Vector2, b: Vector2, c: Vector2) -> boo
 }
 
 ZERO3 :: Vector3.{0, 0, 0};
+ZERO2 :: Vector2.{0, 0};
+
 ONE3 :: Vector3.{1, 1, 1};
+ONE2 :: Vector2.{1, 1};
+
 NEGATIVE_ONE3 :: Vector3.{-1, -1, -1};
 
 Vector3i :: struct {
@@ -197,6 +329,10 @@ component_product :: inline (using v: Vector3i) -> int {
     return x * y * z;
 }
 
+pow :: inline (x: Vector3, power: float32) -> Vector3 {
+    return .{pow(x.x, power), pow(x.y, power), pow(x.z, power)};
+}
+
 floor :: inline (using v : Vector3) -> Vector3 {
     return .{floor(x), floor(y), floor(z)};
 }
@@ -222,6 +358,23 @@ clamp :: inline (value: Vector3, minimum: Vector3, maximum: Vector3) -> Vector3 
         clamp(value.x, minimum.x, maximum.x),
         clamp(value.y, minimum.y, maximum.y),
         clamp(value.z, minimum.z, maximum.z),
+    };
+}
+
+clamp :: inline (value: Vector3, minimum: float32, maximum: float32) -> Vector3 {
+    return .{
+        clamp(value.x, minimum, maximum),
+        clamp(value.y, minimum, maximum),
+        clamp(value.z, minimum, maximum),
+    };
+}
+
+clamp :: inline (value: Vector4, minimum: float32, maximum: float32) -> Vector4 {
+    return .{
+        clamp(value.x, minimum, maximum),
+        clamp(value.y, minimum, maximum),
+        clamp(value.z, minimum, maximum),
+        clamp(value.w, minimum, maximum),
     };
 }
 
@@ -443,4 +596,21 @@ get_smallest_non_negative_root_of_quadratic :: (a: float, b: float, c: float, ma
     if r2 > 0 && r2 < max_r { return true, r2; }
     
     return false, 0;
+}
+
+
+
+/*
+Linearly map between ranges, including reversed endpoints. Without clamping,
+values outside the input range extrapolate. Equal input endpoints produce
+zero, restricted to the output range when clamp_result is enabled.
+*/
+map_range :: (value: float32, from_min: float32, from_max: float32, to_min: float32, to_max: float32, clamp_result: bool) -> float32 {
+    result: float32 = 0;
+    if from_min != from_max {
+        factor: float32 = (value - from_min) / (from_max - from_min);
+        result = to_min + factor * (to_max - to_min);
+    }
+    if clamp_result { result = clamp(result, min(to_min, to_max), max(to_min, to_max)); }
+    return result;
 }
