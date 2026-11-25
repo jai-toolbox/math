@@ -1,8 +1,5 @@
-#scope_module
 #import "Basic";
 #import "Math";
-
-#scope_export
 /*
 3D simplex noise following Stefan Gustavson, Simplex noise demystified (2005),
 pages 9, 11-12: https://itn-web.it.liu.se/~stegu76/TNM084-2019/simplexnoise.pdf

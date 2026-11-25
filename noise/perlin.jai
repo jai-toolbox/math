@@ -1,6 +1,6 @@
-#scope_module
 #import "Basic";
 #import "Math";
+#scope_module
 
 // Fixed Fisher-Yates permutation generated with LCG seed 0x5045524c.
 // Read-only data makes sampling deterministic and safe across bake workers.
