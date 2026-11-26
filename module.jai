@@ -303,6 +303,21 @@ X3 :: Vector3.{1, 0, 0};
 Y3 :: Vector3.{0, 1, 0};
 Z3 :: Vector3.{0, 0, 1};
 
+project :: inline (vector_to_project: Vector3, onto_direction: Vector3) -> float {
+    assert(onto_direction.x != 0 || onto_direction.y != 0 || onto_direction.z != 0, "Projection direction must be nonzero");
+    return dot(vector_to_project, normalize(onto_direction));
+}
+
+project_onto_line :: inline (vector_to_project: Vector3, line_direction: Vector3) -> Vector3 {
+    assert(line_direction.x != 0 || line_direction.y != 0 || line_direction.z != 0, "Projection direction must be nonzero");
+    unit_direction := normalize(line_direction);
+    return dot(vector_to_project, unit_direction) * unit_direction;
+}
+
+project_onto_plane :: inline (vector_to_project: Vector3, plane_normal: Vector3) -> Vector3 {
+    return vector_to_project - project_onto_line(vector_to_project, plane_normal);
+}
+
 // Engine world convention: right-handed XYZ, +X forward, +Z up, -Y right.
 // These describe world directions; asset-local axes and screen axes are separate.
 WORLD_FORWARD  :: X3;
@@ -312,13 +327,20 @@ WORLD_LEFT     :: #run -WORLD_RIGHT;
 WORLD_UP       :: Z3;
 WORLD_DOWN     :: #run -WORLD_UP;
 
+// Conversions maintain handedness.
+world_to_y_up :: inline (v: Vector3) -> Vector3 {
+    return .{dot(v, WORLD_FORWARD), dot(v, WORLD_UP), dot(v, WORLD_RIGHT)};
+}
+world_from_y_up :: inline (v: Vector3) -> Vector3 {
+    return v.x * WORLD_FORWARD + v.y * WORLD_UP + v.z * WORLD_RIGHT;
+}
+
 X2 :: Vector2.{1, 0};
 Y2 :: Vector2.{0, 1};
 
 
 // we inline these things to open them up for optimization
 
-// A vector is finite only when every component is finite.
 is_finite :: inline (v: Vector2) -> bool {
     return is_finite(v.x) && is_finite(v.y);
 }
